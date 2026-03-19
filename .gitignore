@@ -1,0 +1,19 @@
+# Binaries
+/build/
+/ship
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Config
+config.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
