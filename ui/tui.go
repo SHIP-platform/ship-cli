@@ -257,6 +257,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		m.state = stateError
 		return m, nil
+
+	case portForwardErrMsg:
+		m.statusMsg = fmt.Sprintf("Error: %v", msg.err)
+		m.state = stateSelectApp
+		m.list.Title = fmt.Sprintf("Applications in %s", m.selectedProject.Name)
+		m.list.SetItems(appsToItems(m.apps, m.activeForwards))
+		return m, nil
 		
 	case portForwardStartedMsg:
 		m.activeForwards[msg.session.AppID] = msg.session
@@ -394,7 +401,11 @@ func (m Model) View() string {
 	case stateSelectProject, stateSelectApp, stateSelectAction:
 		view := m.list.View()
 		if m.statusMsg != "" && m.state == stateSelectApp {
-			view += "\n" + successStyle.Render(m.statusMsg)
+			if strings.HasPrefix(m.statusMsg, "Error:") {
+				view += "\n" + errorStyle.Render(m.statusMsg)
+			} else {
+				view += "\n" + successStyle.Render(m.statusMsg)
+			}
 		}
 		return docStyle.Render(view)
 	case stateInputLocalPort:
@@ -440,6 +451,7 @@ func (m Model) View() string {
 type projectsMsg struct{ projects []api.Project }
 type appsMsg struct{ apps []api.Application }
 type errMsg struct{ err error }
+type portForwardErrMsg struct{ err error }
 type portForwardStartedMsg struct{ 
 	session *PortForwardSession
 }
@@ -506,7 +518,7 @@ func startPortForward(ctx context.Context, cancel context.CancelFunc, client *ap
 		l, err := net.Listen("tcp", listenAddr)
 		if err != nil {
 			cancel()
-			return errMsg{fmt.Errorf("failed to listen on %d: %v", localPort, err)}
+			return portForwardErrMsg{fmt.Errorf("failed to listen on %d: %v", localPort, err)}
 		}
 		
 		go func() {
