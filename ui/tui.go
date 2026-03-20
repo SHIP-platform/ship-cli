@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -66,6 +68,7 @@ const (
 	stateInputLocalPort
 	stateInputTargetPort
 	stateViewPortForward
+	stateViewLogs
 	stateError
 )
 
@@ -107,6 +110,9 @@ type Model struct {
 	statusMsg   string
 	
 	activeForwards map[string]*PortForwardSession
+	logLines       []string
+	logCancel      context.CancelFunc
+	logChan        chan string
 }
 
 func NewModel(client *api.Client) Model {
@@ -164,16 +170,24 @@ func (m Model) Init() tea.Cmd {
 	return fetchProjects(m.client)
 }
 
+func waitForLogLine(c chan string) tea.Cmd {
+	return func() tea.Msg {
+		return newLogLineMsg{line: <-c}
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if key.Matches(msg, logoutBinding) && m.state != stateInputToken && m.state != stateInputLocalPort && m.state != stateInputTargetPort {
-			// Clean up forwards
 			for _, session := range m.activeForwards {
 				session.Cancel()
 				session.Listener.Close()
 			}
 			m.activeForwards = make(map[string]*PortForwardSession)
+			if m.logCancel != nil {
+				m.logCancel()
+			}
 
 			cfg, err := config.LoadConfig()
 			if err == nil {
@@ -197,6 +211,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				session.Cancel()
 				session.Listener.Close()
 			}
+			if m.logCancel != nil {
+				m.logCancel()
+			}
 			return m, tea.Quit
 		}
 		
@@ -206,7 +223,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					session.Cancel()
 					session.Listener.Close()
 				}
+				if m.logCancel != nil {
+					m.logCancel()
+				}
 				return m, tea.Quit
+			}
+			if m.state == stateViewLogs {
+				if m.logCancel != nil {
+					m.logCancel()
+					m.logCancel = nil
+				}
+				m.state = stateSelectAction
+				m.list.Title = "Select Action"
+				m.list.SetItems(actionItems(m.selectedApp.ID, m.activeForwards))
+				return m, nil
 			}
 			if m.state == stateViewPortForward {
 				m.state = stateSelectAction
@@ -256,6 +286,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		m.err = msg.err
 		m.state = stateError
+		return m, nil
+
+	case newLogLineMsg:
+		if msg.line != "" {
+			m.logLines = append(m.logLines, msg.line)
+			if len(m.logLines) > 100 {
+				m.logLines = m.logLines[len(m.logLines)-100:]
+			}
+			return m, waitForLogLine(m.logChan)
+		}
 		return m, nil
 
 	case portForwardErrMsg:
@@ -346,6 +386,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				} else if i.id == "view-pf" {
 					m.state = stateViewPortForward
+				} else if i.id == "view-logs" {
+					m.state = stateViewLogs
+					m.logLines = []string{"Connecting to log stream...\n"}
+					ctx, cancel := context.WithCancel(context.Background())
+					m.logCancel = cancel
+					m.logChan = make(chan string)
+					
+					startLogsStream(ctx, m.client, m.selectedApp.ID, m.logChan)
+					return m, waitForLogLine(m.logChan)
 				}
 			}
 		}
@@ -441,6 +490,13 @@ func (m Model) View() string {
 			"You can connect to this application using the local port above.\n\n" +
 			statusStyle.Render("Press 'esc' to go back."),
 		)
+	case stateViewLogs:
+		logsView := strings.Join(m.logLines, "")
+		return docStyle.Render(
+			titleStyle.Render(fmt.Sprintf("Logs: %s", m.selectedApp.Name)) + "\n\n" +
+			logsView + "\n\n" +
+			statusStyle.Render("(esc to stop watching and go back)"),
+		)
 	}
 
 	return "Unknown state"
@@ -452,8 +508,52 @@ type projectsMsg struct{ projects []api.Project }
 type appsMsg struct{ apps []api.Application }
 type errMsg struct{ err error }
 type portForwardErrMsg struct{ err error }
+type newLogLineMsg struct {
+	line string
+}
 type portForwardStartedMsg struct{ 
 	session *PortForwardSession
+}
+
+func startLogsStream(ctx context.Context, client *api.Client, appID string, logChan chan string) {
+	go func() {
+		url := fmt.Sprintf("%s/api/applications/%s/logs/stream", strings.TrimSuffix(client.BaseURL, "/"), appID)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			logChan <- fmt.Sprintf("Error creating request: %v\n", err)
+			return
+		}
+		req.Header.Set("Authorization", "Bearer "+client.Token)
+		req.Header.Set("Accept", "text/event-stream")
+
+		// Important: For streaming, we should probably not use the default 10s timeout on client.HTTPClient
+		streamClient := &http.Client{}
+		resp, err := streamClient.Do(req)
+		if err != nil {
+			logChan <- fmt.Sprintf("Error connecting to log stream: %v\n", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		reader := bufio.NewReader(resp.Body)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					if err == io.EOF {
+						logChan <- "\n[Stream closed by server]\n"
+					} else {
+						logChan <- fmt.Sprintf("\n[Error reading stream: %v]\n", err)
+					}
+					return
+				}
+				logChan <- line
+			}
+		}
+	}()
 }
 
 func fetchProjects(client *api.Client) tea.Cmd {
@@ -501,15 +601,19 @@ func appsToItems(apps []api.Application, activeForwards map[string]*PortForwardS
 }
 
 func actionItems(appID string, activeForwards map[string]*PortForwardSession) []list.Item {
+	items := []list.Item{}
 	if _, exists := activeForwards[appID]; exists {
-		return []list.Item{
+		items = append(items, 
 			item{title: "View Details", desc: "View port-forward connection details", id: "view-pf"},
 			item{title: "Stop Port Forward", desc: "Close the active port-forward tunnel", id: "stop-pf"},
-		}
+		)
+	} else {
+		items = append(items, 
+			item{title: "Start Port Forward", desc: "Forward local port to pod", id: "start-pf"},
+		)
 	}
-	return []list.Item{
-		item{title: "Start Port Forward", desc: "Forward local port to pod", id: "start-pf"},
-	}
+	items = append(items, item{title: "View Logs", desc: "Stream live container logs", id: "view-logs"})
+	return items
 }
 
 func startPortForward(ctx context.Context, cancel context.CancelFunc, client *api.Client, app api.Application, localPort, targetPort int) tea.Cmd {
