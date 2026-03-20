@@ -24,9 +24,8 @@ fi
 # Define the binary name based on OS and ARCH
 BINARY_NAME="ship-${OS}-${ARCH}"
 
-# TODO: Replace this URL with your actual hosting location (e.g., GitHub Releases or AWS S3)
-# Example: DOWNLOAD_URL="https://github.com/your-org/ship-cli/releases/latest/download/${BINARY_NAME}"
-DOWNLOAD_URL="https://api.ship-platform.com/downloads/cli/${BINARY_NAME}"
+# Fetch the latest release from GitHub
+DOWNLOAD_URL="https://github.com/SHIP-platform/ship-cli/releases/latest/download/${BINARY_NAME}"
 
 echo "Detected OS: $OS"
 echo "Detected Architecture: $ARCH"

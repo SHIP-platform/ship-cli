@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -65,16 +66,26 @@ func streamLogs(appID string) {
 		log.Fatalf("Error streaming logs: HTTP %d %s", resp.StatusCode, string(body))
 	}
 
-	reader := bufio.NewReader(resp.Body)
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				fmt.Println("\nLog stream closed by server.")
+		reader := bufio.NewReader(resp.Body)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					fmt.Println("\nLog stream closed by server.")
+					return
+				}
+				log.Fatalf("Error reading log stream: %v", err)
+			}
+			
+			// Parse SSE format (data: ...)
+			if strings.HasPrefix(line, "data: ") {
+				content := strings.TrimPrefix(line, "data: ")
+				if content != "stream ended\n" {
+					fmt.Print(content)
+				}
+			} else if strings.HasPrefix(line, "event: done") {
+				// Stream ended successfully
 				return
 			}
-			log.Fatalf("Error reading log stream: %v", err)
 		}
-		fmt.Print(line)
-	}
 }
