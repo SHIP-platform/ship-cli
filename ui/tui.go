@@ -535,34 +535,34 @@ func startLogsStream(ctx context.Context, client *api.Client, appID string, logC
 		}
 		defer resp.Body.Close()
 
-			reader := bufio.NewReader(resp.Body)
-			for {
-				select {
-				case <-ctx.Done():
+		reader := bufio.NewReader(resp.Body)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					if err == io.EOF {
+						logChan <- "\n[Stream closed by server]\n"
+					} else {
+						logChan <- fmt.Sprintf("\n[Error reading stream: %v]\n", err)
+					}
 					return
-				default:
-					line, err := reader.ReadString('\n')
-					if err != nil {
-						if err == io.EOF {
-							logChan <- "\n[Stream closed by server]\n"
-						} else {
-							logChan <- fmt.Sprintf("\n[Error reading stream: %v]\n", err)
-						}
-						return
+				}
+				
+				// Parse SSE format (data: ...)
+				if strings.HasPrefix(line, "data: ") {
+					content := strings.TrimPrefix(line, "data: ")
+					if content != "stream ended\n" {
+						logChan <- content
 					}
-					
-					// Parse SSE format (data: ...)
-					if strings.HasPrefix(line, "data: ") {
-						content := strings.TrimPrefix(line, "data: ")
-						if content != "stream ended\n" {
-							logChan <- content
-						}
-					} else if strings.HasPrefix(line, "event: done") {
-						// Stream ended successfully
-						return
-					}
+				} else if strings.HasPrefix(line, "event: done") {
+					// Stream ended successfully
+					return
 				}
 			}
+		}
 	}()
 }
 
