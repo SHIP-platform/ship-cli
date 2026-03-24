@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"ship-cli/api"
-	"ship-cli/config"
 	"ship-cli/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,14 +16,7 @@ var tuiCmd = &cobra.Command{
 	Short: "Launch the interactive TUI",
 	Long:  `Launch the interactive Text User Interface (TUI) for SHIP Platform.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// If token is not provided via flag, try to load it from config
-		if token == "" {
-			cfg, err := config.LoadConfig()
-			if err == nil && cfg.Token != "" {
-				token = cfg.Token
-			}
-		}
-
+		// Token is already loaded by rootCmd.PersistentPreRun
 		client := api.NewClient(apiServer, token)
 		m := ui.NewModel(client)
 

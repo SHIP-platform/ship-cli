@@ -226,6 +226,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.logCancel != nil {
 					m.logCancel()
 				}
+				
+				// Add specific fallback for unauthorized errors to allow token re-entry
+				if m.state == stateError && strings.Contains(m.err.Error(), "401") {
+					cfg, err := config.LoadConfig()
+					if err == nil {
+						cfg.Token = ""
+						_ = config.SaveConfig(cfg)
+					}
+					m.client.Token = ""
+					m.state = stateInputToken
+					m.textInput.Placeholder = "ship_pat_..."
+					m.textInput.SetValue("")
+					m.textInput.EchoMode = textinput.EchoPassword
+					m.textInput.EchoCharacter = '•'
+					m.textInput.CharLimit = 100
+					m.textInput.Width = 50
+					m.textInput.Focus()
+					return m, textinput.Blink
+				}
+				
 				return m, tea.Quit
 			}
 			if m.state == stateViewLogs {
