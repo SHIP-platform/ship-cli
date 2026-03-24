@@ -32,18 +32,37 @@ echo "Detected Architecture: $ARCH"
 echo "Fetching from: $DOWNLOAD_URL"
 echo ""
 
-# Download the binary
-curl -sL "$DOWNLOAD_URL" -o ship
+# Download the binary to a temporary file first
+TMP_FILE=$(mktemp)
+curl -sL "$DOWNLOAD_URL" -o "$TMP_FILE"
 
 # Make it executable
-chmod +x ship
+chmod +x "$TMP_FILE"
 
 echo ""
-echo "Installing to /usr/local/bin (this may require your password)..."
-sudo mv ship /usr/local/bin/ship
+# Check if /usr/local/bin exists and is in PATH, fallback to ~/.local/bin or ~/bin
+INSTALL_DIR="/usr/local/bin"
+
+# If the user doesn't have sudo rights and isn't root, we might need to install to a local bin
+if [ "$EUID" -ne 0 ] && ! sudo -v >/dev/null 2>&1; then
+    if [ -d "$HOME/.local/bin" ]; then
+        INSTALL_DIR="$HOME/.local/bin"
+    elif [ -d "$HOME/bin" ]; then
+        INSTALL_DIR="$HOME/bin"
+    else
+        echo "Requires sudo privileges to install to /usr/local/bin. Please run with sudo."
+        exit 1
+    fi
+    echo "Installing locally to $INSTALL_DIR..."
+    mv "$TMP_FILE" "$INSTALL_DIR/ship"
+else
+    echo "Installing to $INSTALL_DIR (this may require your password)..."
+    # Use -f to forcefully overwrite existing binary
+    sudo mv -f "$TMP_FILE" "$INSTALL_DIR/ship"
+fi
 
 echo ""
 echo "========================================"
 echo "  Installation complete! 🚀             "
 echo "========================================"
-echo "Run 'ship tui' to get started."
+echo "Run 'ship --help' to get started."
