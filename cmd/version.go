@@ -11,7 +11,7 @@ import (
 )
 
 // Current version of the CLI. This should be updated when bumping versions
-const CurrentVersion = "1.0.4"
+const CurrentVersion = "1.0.5"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
