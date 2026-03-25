@@ -19,22 +19,29 @@ var rootCmd = &cobra.Command{
 	Short: "SHIP Platform CLI",
 	Long:  `A command line interface for interacting with the SHIP Platform.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		cfg, err := config.LoadConfig()
+		if err != nil {
+			cfg = &config.Config{}
+		}
+
+		serverFlag := cmd.PersistentFlags().Lookup("server")
+		if !serverFlag.Changed && cfg.Server != "" {
+			apiServer = cfg.Server
+		}
+
 		// If token is not provided via flag, try to load it from config
 		if token == "" {
-			cfg, err := config.LoadConfig()
-			if err == nil && cfg.Token != "" {
+			if cfg.Token != "" {
 				token = cfg.Token
 			}
-		} else {
-			// If token is provided via flag, save it to config for future use
-			cfg, err := config.LoadConfig()
-			if err != nil {
-				cfg = &config.Config{}
-			}
-			if cfg.Token != token {
-				cfg.Token = token
-				_ = config.SaveConfig(cfg)
-			}
+		} else if cfg.Token != token {
+			cfg.Token = token
+			_ = config.SaveConfig(cfg)
+		}
+
+		if serverFlag.Changed && cfg.Server != apiServer {
+			cfg.Server = apiServer
+			_ = config.SaveConfig(cfg)
 		}
 	},
 }

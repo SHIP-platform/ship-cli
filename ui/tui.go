@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -413,7 +414,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.logCancel = cancel
 					m.logChan = make(chan string)
 					
-					startLogsStream(ctx, m.client, m.selectedApp.ID, m.logChan)
+					startLogsStream(ctx, m.client, m.selectedApp.ID, true, 0, m.logChan)
 					return m, waitForLogLine(m.logChan)
 				}
 			}
@@ -535,10 +536,26 @@ type portForwardStartedMsg struct{
 	session *PortForwardSession
 }
 
-func startLogsStream(ctx context.Context, client *api.Client, appID string, logChan chan string) {
+func startLogsStream(ctx context.Context, client *api.Client, appID string, follow bool, tail int, logChan chan string) {
 	go func() {
-		url := fmt.Sprintf("%s/api/applications/%s/logs/stream", strings.TrimSuffix(client.BaseURL, "/"), appID)
-		req, err := http.NewRequest("GET", url, nil)
+		defer close(logChan)
+
+		base := strings.TrimSuffix(client.BaseURL, "/")
+		u, err := url.Parse(base + "/api/applications/" + url.PathEscape(appID) + "/logs/stream")
+		if err != nil {
+			logChan <- fmt.Sprintf("Error: invalid log URL: %v\n", err)
+			return
+		}
+		q := u.Query()
+		if !follow {
+			q.Set("follow", "false")
+		}
+		if tail > 0 {
+			q.Set("tail", strconv.Itoa(tail))
+		}
+		u.RawQuery = q.Encode()
+
+		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 		if err != nil {
 			logChan <- fmt.Sprintf("Error creating request: %v\n", err)
 			return
@@ -554,6 +571,12 @@ func startLogsStream(ctx context.Context, client *api.Client, appID string, logC
 			return
 		}
 		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			logChan <- fmt.Sprintf("Error: HTTP %d %s\n", resp.StatusCode, string(body))
+			return
+		}
 
 		reader := bufio.NewReader(resp.Body)
 		for {

@@ -1,6 +1,11 @@
 # Binaries
 /build/
 /ship
+/ship-cli
+/ship-darwin-amd64
+/ship-darwin-arm64
+/ship-linux-amd64
+/ship-linux-arm64
 *.exe
 *.exe~
 *.dll
