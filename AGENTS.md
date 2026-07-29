@@ -2,8 +2,8 @@
 
 Before implementing any task in this repository:
 
-1. Read `../docs/agent-context/README.md` and its required context.
-2. Read `../docs/Sprints/README.md` and the selected ticket.
+1. Read `../docs/.agents/context/README.md` and the canonical pages it routes to.
+2. Read `../docs/planning/tasks/README.md` and the selected ticket.
 3. Follow `../docs/.agents/skills/ship-task-workflow/SKILL.md`.
 4. Record analysis and an implementation plan in the ticket before editing CLI
    files.
