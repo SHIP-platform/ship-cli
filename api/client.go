@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -64,7 +66,15 @@ func (c *Client) GetProjects() ([]Project, error) {
 }
 
 func (c *Client) GetApplications(projectID string) ([]Application, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/applications?projectId=%s", c.BaseURL, projectID), nil)
+	endpoint, err := url.Parse(strings.TrimRight(c.BaseURL, "/") + "/api/applications")
+	if err != nil {
+		return nil, err
+	}
+	query := endpoint.Query()
+	query.Set("projectId", projectID)
+	endpoint.RawQuery = query.Encode()
+
+	req, err := http.NewRequest("GET", endpoint.String(), nil)
 	if err != nil {
 		return nil, err
 	}
