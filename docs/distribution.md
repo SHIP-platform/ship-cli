@@ -37,38 +37,24 @@ You can create a new route in your `ship-api` (e.g., `GET /api/cli/download/{os}
 
 ## 3. Installation Scripts
 
-To make installation seamless for users, you can provide a simple `curl` script that automatically detects their OS and downloads the correct binary.
+The supported installer is [`scripts/install.sh`](../scripts/install.sh). The
+Console serves that file at `https://console.ship-platform.com/install.sh`, and
+the script resolves the latest GitHub Release asset for the detected Linux or
+macOS architecture.
 
-Create a file named `install.sh` and host it on your console (e.g., `https://console.ship-platform.com/install.sh`):
+The installer must keep these user-facing guarantees:
+
+- display platform detection, download, and installation stages;
+- animate the download only when stdout is an interactive terminal;
+- keep redirected/CI output line-based and free of terminal control noise;
+- fail on HTTP errors and remove partial temporary files;
+- fall back to an existing `~/.local/bin` or `~/bin` when sudo is unavailable.
+
+Verify installer changes without network or system-directory writes:
 
 ```bash
-#!/bin/bash
-set -e
-
-echo "Downloading SHIP CLI..."
-
-OS="$(uname -s | tr A-Z a-z)"
-ARCH="$(uname -m)"
-
-if [ "$ARCH" = "x86_64" ]; then
-    ARCH="amd64"
-elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-    ARCH="arm64"
-else
-    echo "Unsupported architecture: $ARCH"
-    exit 1
-fi
-
-# Replace this URL with wherever you decide to host the binaries
-DOWNLOAD_URL="https://github.com/your-org/ship-cli/releases/latest/download/ship-${OS}-${ARCH}"
-
-curl -sL "$DOWNLOAD_URL" -o ship
-chmod +x ship
-
-echo "Installing to /usr/local/bin (requires sudo)..."
-sudo mv ship /usr/local/bin/ship
-
-echo "Installation complete! Run 'ship tui' to get started."
+bash -n scripts/install.sh scripts/install_test.sh
+bash scripts/install_test.sh
 ```
 
 Users can then install your CLI with a single command:

@@ -14,6 +14,10 @@ Install the CLI to `/usr/local/bin/ship` with a single command (Linux/macOS):
 ```bash
 curl -sL https://console.ship-platform.com/install.sh | bash
 ```
+
+The installer displays each stage and animates the binary download in an
+interactive terminal, so slow connections still show visible activity.
+
 *(Windows users: download the `.exe` from [Releases](https://github.com/SHIP-platform/ship-cli/releases)).*
 
 ### 2. Launch & Authenticate
@@ -55,7 +59,7 @@ ship port-forward <APP_ID> --local-port 5432 --target-port 5432
 
 ## 🛠️ Development
 
-Requires Go 1.22+.
+Requires Go 1.24.2+ (matching `go.mod`).
 
 ```bash
 git clone https://github.com/SHIP-platform/ship-cli.git
