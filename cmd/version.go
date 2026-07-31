@@ -11,7 +11,7 @@ import (
 )
 
 // Current version of the CLI. This should be updated when bumping versions
-const CurrentVersion = "1.0.5"
+const CurrentVersion = "1.0.6"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -29,7 +29,7 @@ func init() {
 
 func checkUpdate() {
 	fmt.Println("\nChecking for updates...")
-	
+
 	resp, err := http.Get("https://api.github.com/repos/SHIP-platform/ship-cli/releases/latest")
 	if err != nil {
 		fmt.Println("Failed to check for updates.")
@@ -45,7 +45,7 @@ func checkUpdate() {
 	var result struct {
 		TagName string `json:"tag_name"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		fmt.Println("Failed to parse release info.")
 		return
@@ -58,11 +58,11 @@ func checkUpdate() {
 
 	if latestVersion != CurrentVersion {
 		fmt.Printf("🚀 A new version of SHIP CLI is available! (v%s -> v%s)\n", CurrentVersion, latestVersion)
-		
+
 		fmt.Print("Would you like to update now? [Y/n]: ")
 		var response string
 		fmt.Scanln(&response)
-		
+
 		if response == "" || response == "y" || response == "Y" {
 			fmt.Println("Updating...")
 			updateCmd := exec.Command("bash", "-c", "curl -sL https://console.ship-platform.com/install.sh | bash")
