@@ -18,6 +18,7 @@ var tuiCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// Token is already loaded by rootCmd.PersistentPreRun
 		client := api.NewClient(apiServer, token)
+		client.WebSocketBase = websocketServer
 		m := ui.NewModel(client)
 
 		p := tea.NewProgram(m, tea.WithAltScreen())
