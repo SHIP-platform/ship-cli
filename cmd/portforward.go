@@ -9,25 +9,28 @@ import (
 	"os/signal"
 	"syscall"
 
+	"ship-cli/api"
+
 	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 )
 
-var (
-	localPort  int
-	targetPort int
-)
+var localPort int
 
 var portForwardCmd = &cobra.Command{
 	Use:   "port-forward [APP_ID]",
-	Short: "Forward one or more local ports to a pod",
-	Long:  `Forward one or more local ports to a pod running in the SHIP Platform.`,
+	Short: "Forward a local port to an application service",
+	Long:  `Forward a local port to an application service running on the SHIP Platform.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		appID := args[0]
 
 		if token == "" {
 			log.Fatal("Error: --token is required")
+		}
+		wsURL, err := api.BuildPortForwardURL(websocketServer, appID, token)
+		if err != nil {
+			log.Fatalf("Invalid WebSocket server URL: %v", err)
 		}
 
 		listenAddr := fmt.Sprintf("localhost:%d", localPort)
@@ -37,8 +40,7 @@ var portForwardCmd = &cobra.Command{
 		}
 		defer l.Close()
 
-		fmt.Printf("Forwarding from 127.0.0.1:%d -> %d\n", localPort, targetPort)
-		fmt.Printf("Forwarding from [::1]:%d -> %d\n", localPort, targetPort)
+		fmt.Printf("Forwarding localhost:%d -> application service\n", localPort)
 
 		// Handle graceful shutdown
 		c := make(chan os.Signal, 1)
@@ -57,7 +59,7 @@ var portForwardCmd = &cobra.Command{
 				return
 			}
 			fmt.Println("Handling connection for", localPort)
-			go handleConnection(conn, appID)
+			go handleConnection(conn, wsURL)
 		}
 	},
 }
@@ -66,14 +68,11 @@ func init() {
 	rootCmd.AddCommand(portForwardCmd)
 
 	portForwardCmd.Flags().IntVarP(&localPort, "local-port", "l", 8080, "Local port to listen on")
-	portForwardCmd.Flags().IntVarP(&targetPort, "target-port", "t", 80, "Target port on the pod")
 	portForwardCmd.MarkFlagRequired("token")
 }
 
-func handleConnection(localConn net.Conn, appID string) {
+func handleConnection(localConn net.Conn, wsURL string) {
 	defer localConn.Close()
-
-	wsURL := fmt.Sprintf("%s/ws/portforward/%s?port=%d&token=%s", apiServer, appID, targetPort, token)
 
 	// Connect to WebSocket
 	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)

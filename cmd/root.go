@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"os"
 
+	"ship-cli/api"
 	"ship-cli/config"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	token     string
-	apiServer string
+	token           string
+	apiServer       string
+	websocketServer string
 )
 
 var rootCmd = &cobra.Command{
@@ -50,4 +52,5 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&token, "token", "", "Personal Access Token for authentication")
 	rootCmd.PersistentFlags().StringVar(&apiServer, "server", "https://api.ship-platform.com", "API Server URL")
+	rootCmd.PersistentFlags().StringVar(&websocketServer, "websocket-server", api.DefaultWebSocketBase, "WebSocket Server URL")
 }

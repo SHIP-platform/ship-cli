@@ -10,15 +10,17 @@ import (
 )
 
 type Client struct {
-	BaseURL    string
-	Token      string
-	HTTPClient *http.Client
+	BaseURL       string
+	WebSocketBase string
+	Token         string
+	HTTPClient    *http.Client
 }
 
 func NewClient(baseURL, token string) *Client {
 	return &Client{
-		BaseURL: baseURL,
-		Token:   token,
+		BaseURL:       baseURL,
+		WebSocketBase: DefaultWebSocketBase,
+		Token:         token,
 		HTTPClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},

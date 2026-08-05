@@ -30,16 +30,16 @@ var (
 	colorGray      = lipgloss.Color("#4B5563") // Gray for inactive/borders
 
 	docStyle = lipgloss.NewStyle().Margin(1, 2)
-	
-	titleStyle = lipgloss.NewStyle().
-		Foreground(colorAccent).
-		Background(colorPrimary).
-		Bold(true).
-		Padding(0, 1).
-		MarginBottom(1)
 
-	statusStyle = lipgloss.NewStyle().Foreground(colorGray)
-	errorStyle  = lipgloss.NewStyle().Foreground(colorSecondary).Bold(true)
+	titleStyle = lipgloss.NewStyle().
+			Foreground(colorAccent).
+			Background(colorPrimary).
+			Bold(true).
+			Padding(0, 1).
+			MarginBottom(1)
+
+	statusStyle  = lipgloss.NewStyle().Foreground(colorGray)
+	errorStyle   = lipgloss.NewStyle().Foreground(colorSecondary).Bold(true)
 	successStyle = lipgloss.NewStyle().Foreground(colorPrimary).Bold(true)
 
 	// Custom list styles
@@ -66,7 +66,6 @@ const (
 	stateSelectApp
 	stateSelectAction
 	stateInputLocalPort
-	stateInputTargetPort
 	stateViewPortForward
 	stateViewLogs
 	stateError
@@ -83,32 +82,30 @@ func (i item) Description() string { return i.desc }
 func (i item) FilterValue() string { return i.title }
 
 type PortForwardSession struct {
-	AppID      string
-	AppName    string
-	LocalPort  int
-	TargetPort int
-	Listener   net.Listener
-	Cancel     context.CancelFunc
+	AppID     string
+	AppName   string
+	LocalPort int
+	Listener  net.Listener
+	Cancel    context.CancelFunc
 }
 
 type Model struct {
-	state       state
-	client      *api.Client
-	list        list.Model
-	textInput   textinput.Model
-	
-	projects    []api.Project
-	apps        []api.Application
-	
+	state     state
+	client    *api.Client
+	list      list.Model
+	textInput textinput.Model
+
+	projects []api.Project
+	apps     []api.Application
+
 	selectedProject api.Project
 	selectedApp     api.Application
-	
-	localPort   int
-	targetPort  int
-	
-	err         error
-	statusMsg   string
-	
+
+	localPort int
+
+	err       error
+	statusMsg string
+
 	activeForwards map[string]*PortForwardSession
 	logLines       []string
 	logCancel      context.CancelFunc
@@ -121,7 +118,7 @@ func NewModel(client *api.Client) Model {
 	ti.PromptStyle = lipgloss.NewStyle().Foreground(colorPrimary)
 	ti.TextStyle = lipgloss.NewStyle().Foreground(colorText)
 	ti.Cursor.Style = lipgloss.NewStyle().Foreground(colorSecondary)
-	
+
 	initialState := stateLoadingProjects
 	if client.Token == "" {
 		initialState = stateInputToken
@@ -146,7 +143,7 @@ func NewModel(client *api.Client) Model {
 	l.Styles.Title = titleStyle
 	l.Styles.FilterPrompt = lipgloss.NewStyle().Foreground(colorPrimary)
 	l.Styles.FilterCursor = lipgloss.NewStyle().Foreground(colorSecondary)
-	
+
 	l.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{logoutBinding}
 	}
@@ -179,7 +176,7 @@ func waitForLogLine(c chan string) tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if key.Matches(msg, logoutBinding) && m.state != stateInputToken && m.state != stateInputLocalPort && m.state != stateInputTargetPort {
+		if key.Matches(msg, logoutBinding) && m.state != stateInputToken && m.state != stateInputLocalPort {
 			for _, session := range m.activeForwards {
 				session.Cancel()
 				session.Listener.Close()
@@ -216,7 +213,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		}
-		
+
 		if msg.String() == "esc" || msg.String() == "q" {
 			if m.state == stateSelectProject || m.state == stateError || m.state == stateInputToken {
 				for _, session := range m.activeForwards {
@@ -226,7 +223,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.logCancel != nil {
 					m.logCancel()
 				}
-				
+
 				// Add specific fallback for unauthorized errors to allow token re-entry
 				if m.state == stateError && strings.Contains(m.err.Error(), "401") {
 					cfg, err := config.LoadConfig()
@@ -245,7 +242,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textInput.Focus()
 					return m, textinput.Blink
 				}
-				
+
 				return m, tea.Quit
 			}
 			if m.state == stateViewLogs {
@@ -276,7 +273,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.list.SetItems(appsToItems(m.apps, m.activeForwards))
 				return m, nil
 			}
-			if m.state == stateInputLocalPort || m.state == stateInputTargetPort {
+			if m.state == stateInputLocalPort {
 				m.state = stateSelectAction
 				m.list.Title = "Select Action"
 				m.list.SetItems(actionItems(m.selectedApp.ID, m.activeForwards))
@@ -324,7 +321,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.Title = fmt.Sprintf("Applications in %s", m.selectedProject.Name)
 		m.list.SetItems(appsToItems(m.apps, m.activeForwards))
 		return m, nil
-		
+
 	case portForwardStartedMsg:
 		m.activeForwards[msg.session.AppID] = msg.session
 		m.statusMsg = fmt.Sprintf("Started forwarding %s to localhost:%d", msg.session.AppName, msg.session.LocalPort)
@@ -343,7 +340,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			token := strings.TrimSpace(m.textInput.Value())
 			if token != "" {
 				m.client.Token = token
-				
+
 				cfg, err := config.LoadConfig()
 				if err == nil {
 					cfg.Token = token
@@ -412,7 +409,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					ctx, cancel := context.WithCancel(context.Background())
 					m.logCancel = cancel
 					m.logChan = make(chan string)
-					
+
 					startLogsStream(ctx, m.client, m.selectedApp.ID, m.logChan)
 					return m, waitForLogLine(m.logChan)
 				}
@@ -426,22 +423,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			port, err := strconv.Atoi(m.textInput.Value())
 			if err == nil && port > 0 && port < 65536 {
 				m.localPort = port
-				m.state = stateInputTargetPort
-				m.textInput.Placeholder = "e.g. 80 or 5432"
-				m.textInput.SetValue("")
-				m.textInput.Focus()
-			}
-		}
-		return m, cmd
-
-	case stateInputTargetPort:
-		m.textInput, cmd = m.textInput.Update(msg)
-		if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "enter" {
-			port, err := strconv.Atoi(m.textInput.Value())
-			if err == nil && port > 0 && port < 65536 {
-				m.targetPort = port
 				ctx, cancel := context.WithCancel(context.Background())
-				return m, startPortForward(ctx, cancel, m.client, m.selectedApp, m.localPort, m.targetPort)
+				return m, startPortForward(ctx, cancel, m.client, m.selectedApp, m.localPort)
 			}
 		}
 		return m, cmd
@@ -459,9 +442,9 @@ func (m Model) View() string {
 	case stateInputToken:
 		return docStyle.Render(
 			titleStyle.Render("Authentication") + "\n\n" +
-			"Please enter your Personal Access Token (PAT):\n" +
-			m.textInput.View() + "\n\n" +
-			statusStyle.Render("(esc to quit)"),
+				"Please enter your Personal Access Token (PAT):\n" +
+				m.textInput.View() + "\n\n" +
+				statusStyle.Render("(esc to quit)"),
 		)
 	case stateLoadingProjects:
 		return docStyle.Render("Loading projects...")
@@ -480,19 +463,10 @@ func (m Model) View() string {
 	case stateInputLocalPort:
 		return docStyle.Render(
 			titleStyle.Render("Port Forwarding") + "\n\n" +
-			fmt.Sprintf("App: %s\n\n", lipgloss.NewStyle().Foreground(colorPrimary).Render(m.selectedApp.Name)) +
-			"Enter Local Port:\n" +
-			m.textInput.View() + "\n\n" +
-			statusStyle.Render("(esc to go back)"),
-		)
-	case stateInputTargetPort:
-		return docStyle.Render(
-			titleStyle.Render("Port Forwarding") + "\n\n" +
-			fmt.Sprintf("App: %s\n", lipgloss.NewStyle().Foreground(colorPrimary).Render(m.selectedApp.Name)) +
-			fmt.Sprintf("Local Port: %s\n\n", lipgloss.NewStyle().Foreground(colorPrimary).Render(strconv.Itoa(m.localPort))) +
-			"Enter Target Port (Pod Port):\n" +
-			m.textInput.View() + "\n\n" +
-			statusStyle.Render("(esc to go back)"),
+				fmt.Sprintf("App: %s\n\n", lipgloss.NewStyle().Foreground(colorPrimary).Render(m.selectedApp.Name)) +
+				"Enter Local Port:\n" +
+				m.textInput.View() + "\n\n" +
+				statusStyle.Render("(esc to go back)"),
 		)
 	case stateViewPortForward:
 		session := m.activeForwards[m.selectedApp.ID]
@@ -501,21 +475,21 @@ func (m Model) View() string {
 		}
 		return docStyle.Render(
 			titleStyle.Render("Port Forward Details") + "\n\n" +
-			fmt.Sprintf("App: %s\n", lipgloss.NewStyle().Foreground(colorPrimary).Render(session.AppName)) +
-			fmt.Sprintf("Status: %s\n", successStyle.Render("Active ⚡")) +
-			fmt.Sprintf("Forwarding: %s -> %s\n\n", 
-				lipgloss.NewStyle().Foreground(colorPrimary).Render(fmt.Sprintf("127.0.0.1:%d", session.LocalPort)),
-				lipgloss.NewStyle().Foreground(colorSecondary).Render(fmt.Sprintf("pod:%d", session.TargetPort)),
-			) +
-			"You can connect to this application using the local port above.\n\n" +
-			statusStyle.Render("Press 'esc' to go back."),
+				fmt.Sprintf("App: %s\n", lipgloss.NewStyle().Foreground(colorPrimary).Render(session.AppName)) +
+				fmt.Sprintf("Status: %s\n", successStyle.Render("Active ⚡")) +
+				fmt.Sprintf("Forwarding: %s -> %s\n\n",
+					lipgloss.NewStyle().Foreground(colorPrimary).Render(fmt.Sprintf("127.0.0.1:%d", session.LocalPort)),
+					lipgloss.NewStyle().Foreground(colorSecondary).Render("application service"),
+				) +
+				"You can connect to this application using the local port above.\n\n" +
+				statusStyle.Render("Press 'esc' to go back."),
 		)
 	case stateViewLogs:
 		logsView := strings.Join(m.logLines, "")
 		return docStyle.Render(
 			titleStyle.Render(fmt.Sprintf("Logs: %s", m.selectedApp.Name)) + "\n\n" +
-			logsView + "\n\n" +
-			statusStyle.Render("(esc to stop watching and go back)"),
+				logsView + "\n\n" +
+				statusStyle.Render("(esc to stop watching and go back)"),
 		)
 	}
 
@@ -531,7 +505,7 @@ type portForwardErrMsg struct{ err error }
 type newLogLineMsg struct {
 	line string
 }
-type portForwardStartedMsg struct{ 
+type portForwardStartedMsg struct {
 	session *PortForwardSession
 }
 
@@ -570,7 +544,7 @@ func startLogsStream(ctx context.Context, client *api.Client, appID string, logC
 					}
 					return
 				}
-				
+
 				// Parse SSE format (data: ...)
 				if strings.HasPrefix(line, "data: ") {
 					content := strings.TrimPrefix(line, "data: ")
@@ -619,12 +593,12 @@ func appsToItems(apps []api.Application, activeForwards map[string]*PortForwardS
 	for i, a := range apps {
 		title := a.Name
 		desc := fmt.Sprintf("Status: %s | Type: %s", a.Status, a.Type)
-		
+
 		if session, ok := activeForwards[a.ID]; ok {
 			title = fmt.Sprintf("⚡ %s", title)
-			desc = fmt.Sprintf("%s | Fwd: :%d->:%d", desc, session.LocalPort, session.TargetPort)
+			desc = fmt.Sprintf("%s | Fwd: localhost:%d", desc, session.LocalPort)
 		}
-		
+
 		items[i] = item{title: title, desc: desc, id: a.ID, data: a}
 	}
 	return items
@@ -633,28 +607,34 @@ func appsToItems(apps []api.Application, activeForwards map[string]*PortForwardS
 func actionItems(appID string, activeForwards map[string]*PortForwardSession) []list.Item {
 	items := []list.Item{}
 	if _, exists := activeForwards[appID]; exists {
-		items = append(items, 
+		items = append(items,
 			item{title: "View Details", desc: "View port-forward connection details", id: "view-pf"},
 			item{title: "Stop Port Forward", desc: "Close the active port-forward tunnel", id: "stop-pf"},
 		)
 	} else {
-		items = append(items, 
-			item{title: "Start Port Forward", desc: "Forward local port to pod", id: "start-pf"},
+		items = append(items,
+			item{title: "Start Port Forward", desc: "Forward a local port to the application service", id: "start-pf"},
 		)
 	}
 	items = append(items, item{title: "View Logs", desc: "Stream live container logs", id: "view-logs"})
 	return items
 }
 
-func startPortForward(ctx context.Context, cancel context.CancelFunc, client *api.Client, app api.Application, localPort, targetPort int) tea.Cmd {
+func startPortForward(ctx context.Context, cancel context.CancelFunc, client *api.Client, app api.Application, localPort int) tea.Cmd {
 	return func() tea.Msg {
+		wsURL, err := api.BuildPortForwardURL(client.WebSocketBase, app.ID, client.Token)
+		if err != nil {
+			cancel()
+			return portForwardErrMsg{fmt.Errorf("invalid WebSocket server URL: %v", err)}
+		}
+
 		listenAddr := fmt.Sprintf("localhost:%d", localPort)
 		l, err := net.Listen("tcp", listenAddr)
 		if err != nil {
 			cancel()
 			return portForwardErrMsg{fmt.Errorf("failed to listen on %d: %v", localPort, err)}
 		}
-		
+
 		go func() {
 			<-ctx.Done()
 			l.Close()
@@ -666,28 +646,24 @@ func startPortForward(ctx context.Context, cancel context.CancelFunc, client *ap
 				if err != nil {
 					return // closed
 				}
-				go handleConnection(conn, client, app.ID, targetPort)
+				go handleConnection(conn, wsURL)
 			}
 		}()
 
 		session := &PortForwardSession{
-			AppID:      app.ID,
-			AppName:    app.Name,
-			LocalPort:  localPort,
-			TargetPort: targetPort,
-			Listener:   l,
-			Cancel:     cancel,
+			AppID:     app.ID,
+			AppName:   app.Name,
+			LocalPort: localPort,
+			Listener:  l,
+			Cancel:    cancel,
 		}
 
 		return portForwardStartedMsg{session: session}
 	}
 }
 
-func handleConnection(localConn net.Conn, client *api.Client, appID string, targetPort int) {
+func handleConnection(localConn net.Conn, wsURL string) {
 	defer localConn.Close()
-
-	wsBase := "wss://console.ship-platform.com"
-	wsURL := fmt.Sprintf("%s/ws/portforward/%s?port=%d&token=%s", wsBase, appID, targetPort, client.Token)
 
 	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {

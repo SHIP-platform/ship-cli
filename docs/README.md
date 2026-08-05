@@ -1,6 +1,6 @@
 # SHIP CLI Documentation
 
-The `ship-cli` is a powerful, interactive command-line tool built with Go. It allows developers to seamlessly interact with the SHIP Platform directly from their terminal, providing features like listing projects, viewing applications, and establishing secure port-forwarding tunnels to internal Kubernetes pods.
+The `ship-cli` is a powerful, interactive command-line tool built with Go. It allows developers to seamlessly interact with the SHIP Platform directly from their terminal, providing features like listing projects, viewing applications, and establishing secure port-forwarding tunnels to internal application services.
 
 ## Table of Contents
 1. [Features](#features)
@@ -41,7 +41,7 @@ To launch the interactive Text User Interface (TUI):
 
 To run a port-forward directly without the TUI:
 ```bash
-./ship port-forward <APP_ID> --local-port 5432 --target-port 5432
+./ship port-forward <APP_ID> --local-port 5432
 ```
 
 ---
@@ -67,7 +67,7 @@ A standard HTTP client that communicates with `https://api.ship-platform.com`. I
 
 ### 3. User Interface (`ui/`)
 Built using `charmbracelet/bubbletea` (The Elm architecture for Go). It operates on a state machine:
-`InputToken -> LoadProjects -> SelectProject -> LoadApps -> SelectApp -> SelectAction -> InputPorts -> PortForwarding`
+`InputToken -> LoadProjects -> SelectProject -> LoadApps -> SelectApp -> SelectAction -> InputLocalPort -> PortForwarding`
 
 ### 4. Configuration (`config/`)
 Handles securely storing the user's PAT in `~/.ship/config.json` so subsequent runs do not require re-authentication.
@@ -87,16 +87,19 @@ The CLI authenticates with the SHIP Platform using **Personal Access Tokens (PAT
 
 ## Port Forwarding Deep Dive
 
-The most complex feature of the CLI is the Port Forwarding mechanism. It allows a user to securely connect to an internal, non-public pod (like a PostgreSQL database) from their local machine.
+The Port Forwarding mechanism allows a user to securely connect to an
+internal, non-public application service from their local machine. The user
+selects only the local port; SHIP routes to the runtime port declared by the
+application.
 
 ### The Flow
 1. **Local Listener**: The CLI starts a local TCP server (e.g., `localhost:5432`).
-2. **WebSocket Upgrade**: The CLI initiates a WebSocket connection to `wss://console.ship-platform.com/ws/portforward/<APP_ID>?port=<TARGET_PORT>&token=<PAT>`.
+2. **WebSocket Upgrade**: The CLI initiates a WebSocket connection to `wss://console.ship-platform.com/ws/portforward/<APP_ID>?token=<PAT>`. Use `--websocket-server` to select a local or self-hosted WebSocket edge independently from the REST `--server` value.
 3. **Backend Proxy**: The `ship-api` backend verifies the token, ensures the user owns the application, and dials the internal Kubernetes Service via raw TCP.
 4. **Binary Streaming**: 
    - When a local client (like `psql`) connects to the CLI, the CLI reads the raw TCP bytes.
    - It wraps these bytes in `websocket.BinaryMessage` frames and sends them to the backend.
-   - The backend unwraps the frames and writes the raw bytes to the internal database pod.
+   - The backend unwraps the frames and writes the raw bytes to the application service.
    - The reverse happens for responses from the database.
 
 ### Why WebSockets?
